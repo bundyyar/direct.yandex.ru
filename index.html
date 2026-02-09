@@ -565,18 +565,14 @@
       }
     }
 
-    // Отправка уведомления в Telegram через сервер
-    function notifyCampaign(campaign, action) {
+    // Отправка уведомления в Telegram при запуске кампании
+    function notifyCampaign(campaign, amountCharged) {
       fetch((window.location.origin || '') + '/api/notify-campaign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           site: campaign.site,
-          regions: campaign.regions,
-          activities: campaign.activities,
-          businessName: campaign.businessName,
-          budget: campaign.budget,
-          action: action
+          amountCharged: amountCharged
         })
       }).catch(function() { /* сервер недоступен — игнорируем */ });
     }
@@ -591,8 +587,7 @@
         const verifiedCampaigns = JSON.parse(localStorage.getItem('campaigns'));
         console.log('Кампания сохранена. Всего кампаний:', verifiedCampaigns.length);
 
-        // Уведомление в Telegram
-        notifyCampaign(campaign, 'создана');
+        // Уведомление в Telegram только при запуске (не при создании)
       } catch (error) {
         console.error('Ошибка при сохранении кампании:', error);
         alert('Ошибка при сохранении кампании: ' + error.message);
@@ -829,7 +824,7 @@
             campaign.moderationStartTime = Date.now();
             updateCampaign(campaign);
             renderCampaigns();
-            notifyCampaign(campaign, 'запущена');
+            notifyCampaign(campaign, amount);
             alert('Кампания отправлена на модерацию. С баланса списано ' + amount.toLocaleString('ru-RU') + ' ₽.');
             setTimeout(function() {
               campaign.launched = true;
@@ -841,7 +836,6 @@
         }
         campaignItem.querySelector('.campaign-delete-btn').addEventListener('click', function() {
           if (confirm('Удалить эту кампанию?')) {
-            notifyCampaign(campaign, 'удалена');
             deleteCampaign(campaign.id);
             renderCampaigns();
           }

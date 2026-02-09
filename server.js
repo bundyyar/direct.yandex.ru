@@ -144,16 +144,6 @@ app.post('/api/yoomoney-notify', (req, res) => {
     console.log(`ЮMoney: платёж ${label} подтверждён, сумма ${order.amountRub} ₽`);
   }
 
-  // Отправляем уведомление в Telegram о пополнении
-  const sender = body.sender || 'аноним';
-  sendTelegram(
-    `💰 <b>Пополнение баланса!</b>\n\n` +
-    `Сумма: <b>${amountRub} ₽</b>\n` +
-    `Отправитель: ${sender}\n` +
-    `Метка: <code>${label}</code>\n` +
-    `Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
-  );
-
   res.status(200).send('OK');
 });
 
@@ -184,29 +174,18 @@ app.get('/api/confirm-payment', (req, res) => {
 
 /**
  * POST /api/notify-campaign
- * Уведомление в Telegram о создании/запуске кампании.
+ * Уведомление в Telegram при запуске кампании (списание денег).
  */
 app.post('/api/notify-campaign', (req, res) => {
   const data = req.body || {};
   const site = data.site || 'не указан';
-  const regions = (data.regions || []).join(', ') || 'не указаны';
-  const activities = (data.activities || []).join(', ') || 'не указаны';
-  const businessName = data.businessName || 'без названия';
-  const budget = data.budget || 'не выбран';
-  const action = data.action || 'создана';
-
-  let emoji = '📋';
-  if (action === 'запущена') emoji = '🚀';
-  if (action === 'удалена') emoji = '🗑';
+  const amount = data.amountCharged || 0;
 
   sendTelegram(
-    `${emoji} <b>Кампания ${action}!</b>\n\n` +
-    `🏢 Бизнес: <b>${businessName}</b>\n` +
+    `🚀 <b>Новый заказ!</b>\n\n` +
     `🌐 Сайт: ${site}\n` +
-    `📍 Регионы: ${regions}\n` +
-    `💼 Деятельность: ${activities}\n` +
-    `💵 Бюджет: <b>${budget}</b>\n` +
-    `🕐 Время: ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
+    `💰 Списано: <b>${Number(amount).toLocaleString('ru-RU')} ₽</b>\n` +
+    `🕐 ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
   );
 
   res.json({ ok: true });
@@ -226,7 +205,6 @@ app.listen(PORT, () => {
   }
   if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
     console.log(`Telegram-уведомления: включены (chat ${TELEGRAM_CHAT_ID})`);
-    sendTelegram('✅ Сервер запущен и готов к работе!');
   } else {
     console.warn('Telegram не настроен — задайте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в .env');
   }
