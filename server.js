@@ -1,70 +1,73 @@
 /**
- * Сервер для приёма платежей через ЮMoney (YooMoney) + Telegram-уведомления.
- * Запуск: npm install && node server.js
- *
- * Настройки в .env:
- *   YOOMONEY_WALLET=...       — номер вашего кошелька ЮMoney
- *   YOOMONEY_SECRET=...       — секрет для HTTP-уведомлений (из настроек кошелька)
- *   TELEGRAM_BOT_TOKEN=...    — токен Telegram-бота
- *   TELEGRAM_CHAT_ID=...      — ваш chat_id в Telegram
- *   BASE_URL=http://localhost:3000
+ * Сервер для приёма платежей через ЮMoney + Telegram-уведомления.
  */
 
 require('dotenv').config();
-const express = require('express');
-const crypto = require('crypto');
-const https = require('https');
-const path = require('path');
+var express = require('express');
+var crypto = require('crypto');
+var https = require('https');
+var path = require('path');
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+var app = express();
+var PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 
-const YOOMONEY_WALLET = process.env.YOOMONEY_WALLET || '';
-const YOOMONEY_SECRET = process.env.YOOMONEY_SECRET || '';
-const BASE_URL = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+var YOOMONEY_WALLET = process.env.YOOMONEY_WALLET || '';
+var YOOMONEY_SECRET = process.env.YOOMONEY_SECRET || '';
+var BASE_URL = (process.env.BASE_URL || 'http://localhost:' + PORT).replace(/\/$/, '');
+var TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+var TG_CHAT = process.env.TELEGRAM_CHAT_ID || '';
 
-// label -> { amountRub, paid }
-const orders = new Map();
+var orders = new Map();
 
 // ——— Telegram ———
 function sendTelegram(text) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
-    console.log('Telegram не настроен, пропускаем отправку');
-    return;
-  }
-  const payload = JSON.stringify({
-    chat_id: TELEGRAM_CHAT_ID,
-    text: text,
-    parse_mode: 'HTML',
-  });
-  const req = https.request({
-    hostname: 'api.telegram.org',
-    path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  }, (res) => {
-    let data = '';
-    res.on('data', (chunk) => { data += chunk; });
-    res.on('end', () => {
-      if (res.statusCode !== 200) {
-        console.error('Telegram ошибка:', data);
-      }
+  try {
+    if (!TG_TOKEN || !TG_CHAT) {
+      console.log('Telegram not configured, skipping');
+      return;
+    }
+    var payload = JSON.stringify({
+      chat_id: TG_CHAT,
+      text: text
     });
-  });
-  req.on('error', (err) => console.error('Telegram запрос не удался:', err.message));
-  req.write(payload);
-  req.end();
+    var options = {
+      hostname: 'api.telegram.org',
+      path: '/bot' + TG_TOKEN + '/sendMessage',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    };
+    var tgReq = https.request(options, function(tgRes) {
+      var chunks = [];
+      tgRes.on('data', function(c) { chunks.push(c); });
+      tgRes.on('end', function() {
+        var body = Buffer.concat(chunks).toString();
+        if (tgRes.statusCode !== 200) {
+          console.error('Telegram error:', body);
+        } else {
+          console.log('Telegram sent OK');
+        }
+      });
+    });
+    tgReq.on('error', function(e) {
+      console.error('Telegram request failed:', e.message);
+    });
+    tgReq.write(payload);
+    tgReq.end();
+  } catch (e) {
+    console.error('sendTelegram exception:', e);
+  }
 }
 
 // ——— ЮMoney ———
 function verifyYooMoneySignature(params) {
-  const str = [
+  var str = [
     params.notification_type,
     params.operation_id,
     params.amount,
@@ -73,144 +76,127 @@ function verifyYooMoneySignature(params) {
     params.sender || '',
     params.codepro,
     YOOMONEY_SECRET,
-    params.label || '',
+    params.label || ''
   ].join('&');
-  const expected = crypto.createHash('sha1').update(str, 'utf8').digest('hex');
+  var expected = crypto.createHash('sha1').update(str, 'utf8').digest('hex');
   return expected === params.sha1_hash;
 }
 
-/**
- * POST /api/create-payment
- */
-app.post('/api/create-payment', (req, res) => {
-  const amountRub = Math.floor(Number(req.body.amount) || 0);
+// POST /api/create-payment
+app.post('/api/create-payment', function(req, res) {
+  var amountRub = Math.floor(Number(req.body.amount) || 0);
   if (amountRub < 1) {
-    return res.status(400).json({ error: 'Сумма должна быть не менее 1 ₽' });
+    return res.status(400).json({ error: 'Сумма должна быть не менее 1 руб' });
   }
-
   if (!YOOMONEY_WALLET) {
-    return res.status(500).json({
-      error: 'Не настроен кошелёк ЮMoney. Задайте YOOMONEY_WALLET в .env',
-    });
+    return res.status(500).json({ error: 'YOOMONEY_WALLET not set' });
   }
 
-  const label = `pay_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  orders.set(label, { amountRub, paid: false });
+  var label = 'pay_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  orders.set(label, { amountRub: amountRub, paid: false });
 
-  const successUrl = `${BASE_URL}/payment-success.html?orderId=${encodeURIComponent(label)}`;
+  var successUrl = BASE_URL + '/payment-success.html?orderId=' + encodeURIComponent(label);
 
-  const params = new URLSearchParams({
+  var params = new URLSearchParams({
     receiver: YOOMONEY_WALLET,
     'quickpay-form': 'shop',
-    targets: `Пополнение баланса на ${amountRub} ₽`,
+    targets: 'Balance top-up ' + amountRub + ' RUB',
     paymentType: 'AC',
     sum: String(amountRub),
     label: label,
-    successURL: successUrl,
+    successURL: successUrl
   });
 
-  const paymentUrl = `https://yoomoney.ru/quickpay/confirm?${params.toString()}`;
-  return res.json({ paymentUrl, orderId: label });
+  var paymentUrl = 'https://yoomoney.ru/quickpay/confirm?' + params.toString();
+  return res.json({ paymentUrl: paymentUrl, orderId: label });
 });
 
-/**
- * POST /api/yoomoney-notify
- * HTTP-уведомление от ЮMoney о входящем переводе.
- */
-app.post('/api/yoomoney-notify', (req, res) => {
-  const body = req.body || {};
-  console.log('ЮMoney уведомление:', JSON.stringify(body));
+// POST /api/yoomoney-notify
+app.post('/api/yoomoney-notify', function(req, res) {
+  var body = req.body || {};
+  console.log('YooMoney notify:', JSON.stringify(body));
 
   if (YOOMONEY_SECRET) {
     if (!verifyYooMoneySignature(body)) {
-      console.error('ЮMoney: неверная подпись');
       return res.status(400).send('bad signature');
     }
   }
 
   if (body.codepro === 'true') {
-    console.warn('ЮMoney: платёж с кодом протекции, пропускаем');
     return res.status(200).send('OK');
   }
 
-  const label = body.label || '';
-  const amount = parseFloat(body.withdraw_amount) || parseFloat(body.amount) || 0;
-  const amountRub = Math.floor(amount);
+  var label = body.label || '';
+  var amount = parseFloat(body.withdraw_amount) || parseFloat(body.amount) || 0;
 
   if (label && orders.has(label)) {
-    const order = orders.get(label);
+    var order = orders.get(label);
     order.paid = true;
-    order.amountRub = amountRub || order.amountRub;
-    console.log(`ЮMoney: платёж ${label} подтверждён, сумма ${order.amountRub} ₽`);
+    order.amountRub = Math.floor(amount) || order.amountRub;
+    console.log('Payment confirmed:', label, order.amountRub);
   }
 
   res.status(200).send('OK');
 });
 
-/**
- * GET /api/confirm-payment?orderId=...
- */
-app.get('/api/confirm-payment', (req, res) => {
-  const orderId = req.query.orderId;
+// GET /api/confirm-payment
+app.get('/api/confirm-payment', function(req, res) {
+  var orderId = req.query.orderId;
   if (!orderId) {
-    return res.status(400).json({ error: 'Нет orderId' });
+    return res.status(400).json({ error: 'No orderId' });
   }
 
-  const order = orders.get(orderId);
+  var order = orders.get(orderId);
   if (!order) {
-    return res.status(404).json({ error: 'Заказ не найден или уже использован' });
+    return res.status(404).json({ error: 'Order not found' });
   }
 
   if (!order.paid) {
-    return res.json({
-      amount: 0,
-      message: 'Ожидаем подтверждение оплаты от ЮMoney. Обновите страницу через пару секунд.',
-    });
+    return res.json({ amount: 0, message: 'Waiting for YooMoney confirmation...' });
   }
 
   orders.delete(orderId);
-  res.json({ amount: order.amountRub });
+  return res.json({ amount: order.amountRub });
 });
 
-/**
- * POST /api/notify-campaign
- * Уведомление в Telegram при запуске кампании (списание денег).
- */
+// POST /api/notify-campaign — Telegram notification on campaign launch
 app.post('/api/notify-campaign', function(req, res) {
+  console.log('notify-campaign called, body:', JSON.stringify(req.body));
   var data = req.body || {};
-  var site = String(data.site || 'не указан');
-  var amount = String(Number(data.amountCharged) || 0);
+  var site = data.site || 'not specified';
+  var amount = data.amountCharged || 0;
 
   var msg = 'Новый заказ!\n\nСайт: ' + site + '\nСписано: ' + amount + ' руб.';
+  console.log('Sending telegram:', msg);
 
-  console.log('notify-campaign:', msg);
   sendTelegram(msg);
-  return res.status(200).json({ ok: true });
+  return res.json({ ok: true });
 });
 
-/**
- * GET /api/test-telegram — проверка что Telegram работает
- */
+// GET /api/test-telegram — debug endpoint
 app.get('/api/test-telegram', function(req, res) {
-  sendTelegram('Тестовое сообщение - Telegram работает!');
-  return res.status(200).json({ ok: true, token: TELEGRAM_BOT_TOKEN ? 'set' : 'empty', chat: TELEGRAM_CHAT_ID ? 'set' : 'empty' });
+  console.log('test-telegram called');
+  sendTelegram('Test - Telegram works!');
+  return res.json({ ok: true, token: TG_TOKEN ? 'set' : 'empty', chat: TG_CHAT ? 'set' : 'empty' });
 });
 
-app.get('/payment-success.html', (req, res) => {
+// Static pages
+app.get('/payment-success.html', function(req, res) {
   res.sendFile(path.join(__dirname, 'payment-success.html'));
 });
-app.get('/payment-fail.html', (req, res) => {
+app.get('/payment-fail.html', function(req, res) {
   res.sendFile(path.join(__dirname, 'payment-fail.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Сервер: ${BASE_URL}`);
-  if (YOOMONEY_WALLET) {
-    console.log(`Платёжная система: ЮMoney (кошелёк ${YOOMONEY_WALLET})`);
-  }
-  if (TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID) {
-    console.log(`Telegram-уведомления: включены (chat ${TELEGRAM_CHAT_ID})`);
-  } else {
-    console.warn('Telegram не настроен — задайте TELEGRAM_BOT_TOKEN и TELEGRAM_CHAT_ID в .env');
-  }
+// Global error handler
+app.use(function(err, req, res, next) {
+  console.error('Express error:', err);
+  res.status(500).json({ error: err.message || 'Unknown error' });
+});
+
+app.listen(PORT, function() {
+  console.log('Server: ' + BASE_URL);
+  console.log('TG_TOKEN: ' + (TG_TOKEN ? 'set' : 'NOT SET'));
+  console.log('TG_CHAT: ' + (TG_CHAT ? 'set' : 'NOT SET'));
+  console.log('YOOMONEY_WALLET: ' + (YOOMONEY_WALLET ? 'set' : 'NOT SET'));
 });
