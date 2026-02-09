@@ -176,25 +176,24 @@ app.get('/api/confirm-payment', (req, res) => {
  * POST /api/notify-campaign
  * Уведомление в Telegram при запуске кампании (списание денег).
  */
-app.post('/api/notify-campaign', (req, res) => {
-  try {
-    const data = req.body || {};
-    const site = data.site || 'не указан';
-    const amount = Number(data.amountCharged) || 0;
-    const now = new Date();
-    const time = now.toISOString().replace('T', ' ').slice(0, 19);
+app.post('/api/notify-campaign', function(req, res) {
+  var data = req.body || {};
+  var site = String(data.site || 'не указан');
+  var amount = String(Number(data.amountCharged) || 0);
 
-    const msg = '🚀 Новый заказ!\n\n' +
-      '🌐 Сайт: ' + site + '\n' +
-      '💰 Списано: ' + amount + ' руб.\n' +
-      '🕐 ' + time;
+  var msg = 'Новый заказ!\n\nСайт: ' + site + '\nСписано: ' + amount + ' руб.';
 
-    sendTelegram(msg);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('notify-campaign error:', err);
-    res.status(500).json({ error: err.message });
-  }
+  console.log('notify-campaign:', msg);
+  sendTelegram(msg);
+  return res.status(200).json({ ok: true });
+});
+
+/**
+ * GET /api/test-telegram — проверка что Telegram работает
+ */
+app.get('/api/test-telegram', function(req, res) {
+  sendTelegram('Тестовое сообщение - Telegram работает!');
+  return res.status(200).json({ ok: true, token: TELEGRAM_BOT_TOKEN ? 'set' : 'empty', chat: TELEGRAM_CHAT_ID ? 'set' : 'empty' });
 });
 
 app.get('/payment-success.html', (req, res) => {
