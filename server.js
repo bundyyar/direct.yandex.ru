@@ -177,18 +177,24 @@ app.get('/api/confirm-payment', (req, res) => {
  * Уведомление в Telegram при запуске кампании (списание денег).
  */
 app.post('/api/notify-campaign', (req, res) => {
-  const data = req.body || {};
-  const site = data.site || 'не указан';
-  const amount = data.amountCharged || 0;
+  try {
+    const data = req.body || {};
+    const site = data.site || 'не указан';
+    const amount = Number(data.amountCharged) || 0;
+    const now = new Date();
+    const time = now.toISOString().replace('T', ' ').slice(0, 19);
 
-  sendTelegram(
-    `🚀 <b>Новый заказ!</b>\n\n` +
-    `🌐 Сайт: ${site}\n` +
-    `💰 Списано: <b>${Number(amount).toLocaleString('ru-RU')} ₽</b>\n` +
-    `🕐 ${new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}`
-  );
+    const msg = '🚀 Новый заказ!\n\n' +
+      '🌐 Сайт: ' + site + '\n' +
+      '💰 Списано: ' + amount + ' руб.\n' +
+      '🕐 ' + time;
 
-  res.json({ ok: true });
+    sendTelegram(msg);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('notify-campaign error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/payment-success.html', (req, res) => {
