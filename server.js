@@ -24,45 +24,27 @@ var orders = new Map();
 
 // ——— Telegram ———
 function sendTelegram(text) {
-  try {
-    if (!TG_TOKEN || !TG_CHAT) {
-      console.log('Telegram not configured, skipping');
-      return;
-    }
-    var url = 'https://api.telegram.org/bot' + encodeURI(TG_TOKEN) + '/sendMessage';
-    var payload = JSON.stringify({ chat_id: TG_CHAT, text: text });
-
-    var parsed = new URL(url);
-    var options = {
-      hostname: parsed.hostname,
-      port: 443,
-      path: parsed.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(payload)
-      }
-    };
-    var tgReq = https.request(options, function(tgRes) {
-      var chunks = [];
-      tgRes.on('data', function(c) { chunks.push(c); });
-      tgRes.on('end', function() {
-        var body = Buffer.concat(chunks).toString();
-        if (tgRes.statusCode !== 200) {
-          console.error('Telegram error:', body);
-        } else {
-          console.log('Telegram sent OK');
-        }
-      });
-    });
-    tgReq.on('error', function(e) {
-      console.error('Telegram request failed:', e.message);
-    });
-    tgReq.write(payload);
-    tgReq.end();
-  } catch (e) {
-    console.error('sendTelegram exception:', e);
+  if (!TG_TOKEN || !TG_CHAT) {
+    console.log('Telegram not configured, skipping');
+    return;
   }
+  var url = 'https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage';
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TG_CHAT, text: text })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.ok) {
+      console.log('Telegram sent OK');
+    } else {
+      console.error('Telegram error:', JSON.stringify(data));
+    }
+  })
+  .catch(function(e) {
+    console.error('Telegram fetch failed:', e.message);
+  });
 }
 
 // ——— ЮMoney ———
@@ -184,31 +166,19 @@ app.get('/api/test-telegram', function(req, res) {
     if (!TG_TOKEN || !TG_CHAT) {
       return res.json({ ok: false, error: 'not configured' });
     }
-    var payload = JSON.stringify({ chat_id: TG_CHAT, text: 'Test from Render!' });
-    var tgUrl = new URL('https://api.telegram.org/bot' + encodeURI(TG_TOKEN) + '/sendMessage');
-    var options = {
-      hostname: tgUrl.hostname,
-      port: 443,
-      path: tgUrl.pathname,
+    var url = 'https://api.telegram.org/bot' + TG_TOKEN + '/sendMessage';
+    fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-    };
-    var tgReq = https.request(options, function(tgRes) {
-      var data = '';
-      tgRes.on('data', function(c) { data += c; });
-      tgRes.on('end', function() {
-        try {
-          res.json({ ok: true, tg: JSON.parse(data) });
-        } catch(e) {
-          res.json({ ok: false, raw: data });
-        }
-      });
-    });
-    tgReq.on('error', function(e) {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TG_CHAT, text: 'Test from Render!' })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      res.json({ ok: true, tg: data });
+    })
+    .catch(function(e) {
       res.json({ ok: false, error: e.message });
     });
-    tgReq.write(payload);
-    tgReq.end();
   } catch(e) {
     res.json({ ok: false, error: e.message, stack: e.stack });
   }
