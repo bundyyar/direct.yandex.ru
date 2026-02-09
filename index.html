@@ -565,22 +565,34 @@
       }
     }
 
+    // Отправка уведомления в Telegram через сервер
+    function notifyCampaign(campaign, action) {
+      fetch((window.location.origin || '') + '/api/notify-campaign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          site: campaign.site,
+          regions: campaign.regions,
+          activities: campaign.activities,
+          businessName: campaign.businessName,
+          budget: campaign.budget,
+          action: action
+        })
+      }).catch(function() { /* сервер недоступен — игнорируем */ });
+    }
+
     function saveCampaign(campaign) {
       try {
         const campaigns = getCampaigns();
-        console.log('Текущие кампании перед добавлением:', campaigns);
         campaigns.push(campaign);
         const jsonString = JSON.stringify(campaigns);
-        console.log('JSON строка для сохранения:', jsonString);
         localStorage.setItem('campaigns', jsonString);
         
-        // Проверяем, что данные действительно сохранились
-        const verify = localStorage.getItem('campaigns');
-        console.log('Проверка сохранения. Данные в localStorage:', verify);
-        
-        const verifiedCampaigns = JSON.parse(verify);
+        const verifiedCampaigns = JSON.parse(localStorage.getItem('campaigns'));
         console.log('Кампания сохранена. Всего кампаний:', verifiedCampaigns.length);
-        console.log('Последняя сохраненная кампания:', verifiedCampaigns[verifiedCampaigns.length - 1]);
+
+        // Уведомление в Telegram
+        notifyCampaign(campaign, 'создана');
       } catch (error) {
         console.error('Ошибка при сохранении кампании:', error);
         alert('Ошибка при сохранении кампании: ' + error.message);
@@ -817,6 +829,7 @@
             campaign.moderationStartTime = Date.now();
             updateCampaign(campaign);
             renderCampaigns();
+            notifyCampaign(campaign, 'запущена');
             alert('Кампания отправлена на модерацию. С баланса списано ' + amount.toLocaleString('ru-RU') + ' ₽.');
             setTimeout(function() {
               campaign.launched = true;
@@ -828,6 +841,7 @@
         }
         campaignItem.querySelector('.campaign-delete-btn').addEventListener('click', function() {
           if (confirm('Удалить эту кампанию?')) {
+            notifyCampaign(campaign, 'удалена');
             deleteCampaign(campaign.id);
             renderCampaigns();
           }
