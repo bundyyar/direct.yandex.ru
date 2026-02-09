@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оплата прошла</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .payment-page { max-width: 420px; margin: 60px auto; padding: 0 20px; text-align: center; }
+    .payment-card { background: #fff; border-radius: 20px; padding: 32px; box-shadow: 0 14px 40px rgba(16,38,74,0.08); }
+    .success-icon { font-size: 48px; margin-bottom: 16px; }
+    .back-link { display: inline-block; margin-top: 20px; color: #0066ff; font-weight: 600; }
+    .spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #e7eaf0; border-top-color: #0066ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .retry-hint { color: #999; font-size: 13px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="payment-page">
+    <div class="payment-card">
+      <div class="success-icon" id="status-icon">
+        <div class="spinner"></div>
+      </div>
+      <h1 id="status-title">Проверяем оплату…</h1>
+      <p class="muted" id="message">Ожидаем подтверждение от ЮMoney. Это может занять до 30 секунд.</p>
+      <p class="retry-hint" id="retry-hint"></p>
+      <a href="index.html" class="back-link" id="back-link" style="display: none;">← Вернуться в кабинет</a>
+    </div>
+  </div>
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var orderId = params.get('orderId');
+      var backLink = document.getElementById('back-link');
+      var message = document.getElementById('message');
+      var statusIcon = document.getElementById('status-icon');
+      var statusTitle = document.getElementById('status-title');
+      var retryHint = document.getElementById('retry-hint');
+
+      if (!orderId) {
+        statusIcon.innerHTML = '⚠';
+        statusTitle.textContent = 'Ошибка';
+        message.textContent = 'Не указан заказ. Вернитесь в кабинет.';
+        backLink.style.display = 'inline-block';
+        return;
+      }
+
+      var base = window.location.origin;
+      var attempts = 0;
+      var maxAttempts = 30; // ~60 секунд
+
+      function showSuccess(amount) {
+        statusIcon.innerHTML = '✓';
+        statusTitle.textContent = 'Оплата прошла!';
+        message.textContent = 'На баланс зачислено ' + amount.toLocaleString('ru-RU') + ' ₽.';
+        retryHint.textContent = '';
+        backLink.style.display = 'inline-block';
+      }
+
+      function showError(text) {
+        statusIcon.innerHTML = '⚠';
+        statusTitle.textContent = 'Не удалось подтвердить';
+        message.textContent = text;
+        retryHint.textContent = '';
+        backLink.style.display = 'inline-block';
+      }
+
+      function check() {
+        attempts++;
+        fetch(base + '/api/confirm-payment?orderId=' + encodeURIComponent(orderId))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.amount && data.amount > 0) {
+              // Оплата подтверждена — зачисляем в баланс
+              var v = localStorage.getItem('campaignBalance');
+              var current = v != null ? parseFloat(v) || 0 : 0;
+              localStorage.setItem('campaignBalance', String(current + data.amount));
+              showSuccess(data.amount);
+              return;
+            }
+            if (data.message) {
+              // Ещё ждём уведомление от ЮMoney
+              message.textContent = data.message;
+              retryHint.textContent = 'Попытка ' + attempts + ' из ' + maxAttempts + '…';
+              if (attempts < maxAttempts) {
+                setTimeout(check, 2000);
+              } else {
+                showError('Время ожидания истекло. Если деньги были списаны, баланс обновится автоматически при следующем визите, или обратитесь в поддержку.');
+              }
+              return;
+            }
+            showError('Заказ уже был обработан или не найден.');
+          })
+          .catch(function() {
+            showError('Не удалось подтвердить платёж. Проверьте, что сервер запущен.');
+          });
+      }
+      check();
+    })();
+  </script>
+</body>
+</html>

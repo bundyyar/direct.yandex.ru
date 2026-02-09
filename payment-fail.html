@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оплата не прошла</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .payment-page { max-width: 420px; margin: 60px auto; padding: 0 20px; text-align: center; }
+    .payment-card { background: #fff; border-radius: 20px; padding: 32px; box-shadow: 0 14px 40px rgba(16,38,74,0.08); }
+    .fail-icon { font-size: 48px; margin-bottom: 16px; color: #c00; }
+    .back-link { display: inline-block; margin-top: 20px; color: #0066ff; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="payment-page">
+    <div class="payment-card">
+      <div class="fail-icon">✕</div>
+      <h1>Оплата не прошла</h1>
+      <p class="muted">Платёж был отменён или произошла ошибка. Деньги с карты не списаны.</p>
+      <a href="payment.html" class="back-link">← Попробовать снова</a>
+      <br>
+      <a href="index.html" class="back-link" style="margin-top: 8px;">Вернуться в кабинет</a>
+    </div>
+  </div>
+</body>
+</html>

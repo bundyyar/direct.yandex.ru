@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Пополнение баланса — Яндекс Директ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .payment-page { max-width: 420px; margin: 60px auto; padding: 0 20px; }
+    .payment-card { background: #fff; border-radius: 20px; padding: 32px; box-shadow: 0 14px 40px rgba(16,38,74,0.08); border: 1px solid #e7eaf0; }
+    .payment-card h1 { margin: 0 0 8px; font-size: 22px; }
+    .payment-card .muted { color: #6f7683; margin: 0 0 24px; font-size: 14px; }
+    .payment-form .form-row { margin-bottom: 18px; }
+    .payment-form label { display: block; font-weight: 700; margin-bottom: 6px; font-size: 14px; }
+    .payment-form input { width: 100%; padding: 14px; border: 1px solid #d9dce3; border-radius: 12px; font-size: 16px; background: #f8f9fc; }
+    .payment-form input:focus { outline: none; border-color: #0066ff; }
+    .payment-summary { background: #f8f9fd; border-radius: 12px; padding: 16px; margin: 24px 0; }
+    .payment-summary .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .payment-summary .total { font-weight: 800; font-size: 18px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e7eaf0; }
+    .payment-method { background: #f0f4ff; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 12px; }
+    .payment-method-icon { width: 36px; height: 36px; background: #7b2bff; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 14px; }
+    .payment-method-text { font-size: 14px; color: #333; }
+    .payment-method-text strong { display: block; font-size: 15px; }
+    .back-link { display: inline-block; margin-top: 20px; color: #0066ff; font-weight: 600; font-size: 14px; }
+    .back-link:hover { text-decoration: underline; }
+    .quick-amounts { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+    .quick-amount { padding: 8px 16px; border: 1px solid #d9dce3; border-radius: 10px; background: #fff; cursor: pointer; font-size: 14px; font-weight: 600; color: #333; transition: all 0.15s; }
+    .quick-amount:hover { border-color: #0066ff; color: #0066ff; background: #f0f4ff; }
+  </style>
+</head>
+<body>
+  <div class="payment-page">
+    <div class="payment-card">
+      <h1>Пополнение баланса</h1>
+      <p class="muted">Введите сумму пополнения. Вы будете перенаправлены на страницу оплаты ЮMoney.</p>
+
+      <div class="payment-method">
+        <div class="payment-method-icon">Ю</div>
+        <div class="payment-method-text">
+          <strong>ЮMoney</strong>
+          Оплата картой или с кошелька
+        </div>
+      </div>
+
+      <form class="payment-form" id="payment-form">
+        <div class="form-row">
+          <label for="amount">Сумма, ₽</label>
+          <input type="number" id="amount" name="amount" min="2" step="1" placeholder="Например, 5000" required>
+        </div>
+
+        <div class="quick-amounts">
+          <button type="button" class="quick-amount" data-amount="500">500 ₽</button>
+          <button type="button" class="quick-amount" data-amount="1000">1 000 ₽</button>
+          <button type="button" class="quick-amount" data-amount="2000">2 000 ₽</button>
+          <button type="button" class="quick-amount" data-amount="5000">5 000 ₽</button>
+        </div>
+
+        <div class="payment-summary">
+          <div class="row"><span>Текущий баланс:</span> <span id="current-balance">0 ₽</span></div>
+          <div class="row"><span>К пополнению:</span> <span id="to-add">0 ₽</span></div>
+          <div class="row total"><span>Баланс после пополнения:</span> <span id="new-balance">0 ₽</span></div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Перейти к оплате</button>
+      </form>
+      <a href="index.html" class="back-link">← Вернуться в кабинет</a>
+    </div>
+  </div>
+  <script>
+    function getBalance() {
+      var v = localStorage.getItem('campaignBalance');
+      return v != null ? parseFloat(v) || 0 : 0;
+    }
+    function formatRub(n) {
+      return (n || 0).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ₽';
+    }
+    var amountInput = document.getElementById('amount');
+    var currentBalanceEl = document.getElementById('current-balance');
+    var toAddEl = document.getElementById('to-add');
+    var newBalanceEl = document.getElementById('new-balance');
+
+    function updateSummary() {
+      var current = getBalance();
+      var add = parseFloat(amountInput.value) || 0;
+      if (add < 0) add = 0;
+      currentBalanceEl.textContent = formatRub(current);
+      toAddEl.textContent = formatRub(add);
+      newBalanceEl.textContent = formatRub(current + add);
+    }
+    currentBalanceEl.textContent = formatRub(getBalance());
+    amountInput.addEventListener('input', updateSummary);
+    amountInput.addEventListener('change', updateSummary);
+
+    // Быстрый выбор суммы
+    document.querySelectorAll('.quick-amount').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        amountInput.value = this.dataset.amount;
+        updateSummary();
+      });
+    });
+
+    document.getElementById('payment-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var add = Math.floor(parseFloat(amountInput.value) || 0);
+      if (add < 2) {
+        alert('Минимальная сумма пополнения — 2 ₽');
+        return;
+      }
+      var btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Перенаправление на ЮMoney...';
+
+      var apiUrl = (window.location.origin || '') + '/api/create-payment';
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: add })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.paymentUrl) {
+            window.location.href = data.paymentUrl;
+            return;
+          }
+          if (data.error) {
+            alert(data.error);
+            btn.disabled = false;
+            btn.textContent = 'Перейти к оплате';
+          }
+        })
+        .catch(function() {
+          alert('Сервер недоступен. Убедитесь, что сервер запущен (node server.js).');
+          btn.disabled = false;
+          btn.textContent = 'Перейти к оплате';
+        });
+    });
+  </script>
+</body>
+</html>
