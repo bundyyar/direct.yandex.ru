@@ -173,11 +173,31 @@ app.post('/api/notify-campaign', function(req, res) {
   return res.json({ ok: true });
 });
 
-// GET /api/test-telegram — debug endpoint
+// GET /api/test-telegram — debug endpoint: sends message and returns Telegram API response
 app.get('/api/test-telegram', function(req, res) {
-  console.log('test-telegram called');
-  sendTelegram('Test - Telegram works!');
-  return res.json({ ok: true, token: TG_TOKEN ? 'set' : 'empty', chat: TG_CHAT ? 'set' : 'empty' });
+  if (!TG_TOKEN || !TG_CHAT) {
+    return res.json({ ok: false, error: 'TG_TOKEN or TG_CHAT not set', token: TG_TOKEN ? TG_TOKEN.slice(0, 6) + '...' : 'EMPTY', chat: TG_CHAT || 'EMPTY' });
+  }
+  var payload = JSON.stringify({ chat_id: TG_CHAT, text: 'Test from Render server!' });
+  var options = {
+    hostname: 'api.telegram.org',
+    path: '/bot' + TG_TOKEN + '/sendMessage',
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+  };
+  var tgReq = https.request(options, function(tgRes) {
+    var chunks = [];
+    tgRes.on('data', function(c) { chunks.push(c); });
+    tgRes.on('end', function() {
+      var body = Buffer.concat(chunks).toString();
+      res.json({ ok: true, token: TG_TOKEN.slice(0, 6) + '...', chat: TG_CHAT, telegramResponse: JSON.parse(body) });
+    });
+  });
+  tgReq.on('error', function(e) {
+    res.json({ ok: false, error: e.message });
+  });
+  tgReq.write(payload);
+  tgReq.end();
 });
 
 // Static pages
