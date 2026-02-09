@@ -29,13 +29,14 @@ function sendTelegram(text) {
       console.log('Telegram not configured, skipping');
       return;
     }
-    var payload = JSON.stringify({
-      chat_id: TG_CHAT,
-      text: text
-    });
+    var url = 'https://api.telegram.org/bot' + encodeURI(TG_TOKEN) + '/sendMessage';
+    var payload = JSON.stringify({ chat_id: TG_CHAT, text: text });
+
+    var parsed = new URL(url);
     var options = {
-      hostname: 'api.telegram.org',
-      path: '/bot' + TG_TOKEN + '/sendMessage',
+      hostname: parsed.hostname,
+      port: 443,
+      path: parsed.pathname,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -184,10 +185,11 @@ app.get('/api/test-telegram', function(req, res) {
       return res.json({ ok: false, error: 'not configured' });
     }
     var payload = JSON.stringify({ chat_id: TG_CHAT, text: 'Test from Render!' });
+    var tgUrl = new URL('https://api.telegram.org/bot' + encodeURI(TG_TOKEN) + '/sendMessage');
     var options = {
-      hostname: 'api.telegram.org',
+      hostname: tgUrl.hostname,
       port: 443,
-      path: '/bot' + TG_TOKEN + '/sendMessage',
+      path: tgUrl.pathname,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
     };
