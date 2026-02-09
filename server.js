@@ -13,7 +13,6 @@ var PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(__dirname));
 
 var YOOMONEY_WALLET = process.env.YOOMONEY_WALLET || '';
 var YOOMONEY_SECRET = process.env.YOOMONEY_SECRET || '';
@@ -200,13 +199,8 @@ app.get('/api/test-telegram', function(req, res) {
   tgReq.end();
 });
 
-// Static pages
-app.get('/payment-success.html', function(req, res) {
-  res.sendFile(path.join(__dirname, 'payment-success.html'));
-});
-app.get('/payment-fail.html', function(req, res) {
-  res.sendFile(path.join(__dirname, 'payment-fail.html'));
-});
+// Static files — AFTER all API routes
+app.use(express.static(__dirname));
 
 // Global error handler
 app.use(function(err, req, res, next) {
